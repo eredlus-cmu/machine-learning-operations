@@ -1,0 +1,8 @@
+#cloud-config
+package_update: true
+packages: [docker.io, docker-compose, curl, ca-certificates, python3]
+runcmd:
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker azureuser
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash

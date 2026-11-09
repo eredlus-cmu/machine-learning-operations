@@ -1,0 +1,25 @@
+#cloud-config
+package_update: true
+packages: [docker.io, curl, ca-certificates]
+write_files:
+  - path: /opt/start_mlflow.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      az login --identity
+      az acr login --name ${acr_name}
+      docker pull ${acr_login_server}/mlflow-server:latest
+      docker rm -f mlflow 2>/dev/null || true
+      mkdir -p /var/lib/mlflow
+      chown -R 10001:10001 /var/lib/mlflow
+      docker run -d --name mlflow --restart unless-stopped -p 5000:5000 -v /var/lib/mlflow:/mlflow \
+        ${mlflow_image} mlflow server \
+          --backend-store-uri sqlite:////mlflow/mlflow.db \
+          --serve-artifacts \
+          --host 0.0.0.0 --port 5000
+runcmd:
+  - systemctl enable docker && systemctl start docker
+  - usermod -aG docker azureuser
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  - /opt/start_mlflow.sh

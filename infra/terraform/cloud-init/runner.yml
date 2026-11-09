@@ -1,0 +1,9 @@
+#cloud-config
+package_update: true
+packages: [docker.io, curl, ca-certificates, jq, python3-pip, git]
+runcmd:
+  - systemctl enable docker && systemctl start docker
+  - usermod -aG docker azureuser
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  - pip3 install --break-system-packages mlflow==2.10.0 requests
+  - mkdir -p /opt/actions-runner && chown azureuser:azureuser /opt/actions-runner

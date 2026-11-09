@@ -1,0 +1,17 @@
+{
+  "resource_group": "<resource_group>",
+  "location": "<location>",
+  "mlflow_private_ip": "<mlflow_private_ip>",
+  "mlflow_uri": "<mlflow_uri>",
+  "beta_vm_ip": "<beta_vm_ip>",
+  "beta_vm_name": "<beta_vm_name>",
+  "prod_vm_ip": "<prod_vm_ip>",
+  "prod_vm_name": "<prod_vm_name>",
+  "runner_vm_name": "<runner_vm_name>",
+  "acr_name": "<acr_name>",
+  "acr_login_server": "<acr_login_server>",
+  "acr_id": "<acr_id>",
+  "subnet_id": "<subnet_id>",
+  "train_uai_id": "<train_uai_id>",
+  "unique_prefix": "<unique_prefix>"
+}

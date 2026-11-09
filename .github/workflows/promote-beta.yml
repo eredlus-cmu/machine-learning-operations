@@ -1,0 +1,49 @@
+name: Promote Beta
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: MLflow model version to promote to beta
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: promote-beta-${{ github.event.inputs.model_version }}
+  cancel-in-progress: false
+env:
+  MODEL_VERSION: ${{ github.event.inputs.model_version }}
+jobs:
+  set-beta-alias:
+    runs-on: [self-hosted, vnet]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - run: pip install mlflow==2.10.0
+      # TODO(task2): set registry alias `beta` on credit_default_model v$MODEL_VERSION
+      # (scripts/promote_alias.py; MLFLOW_TRACKING_URI is http://$MLFLOW_PRIVATE_IP:5000).
+      - name: Set beta alias
+        run: |
+          echo "TODO(task2): set beta alias" >&2
+          exit 1
+  deploy-beta:
+    needs: set-beta-alias
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # TODO(task2): deploy $ACR_LOGIN_SERVER/credit-default-serve:latest to the beta VM
+      # with MODEL_ALIAS=beta via scripts/deploy_inference.sh, then pytest tests/test_inference.py
+      # against http://$BETA_VM_IP:8000.
+      - name: Deploy to beta
+        run: |
+          echo "TODO(task2): deploy beta inference" >&2
+          exit 1

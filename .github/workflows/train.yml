@@ -1,0 +1,46 @@
+name: Train
+on:
+  workflow_dispatch:
+  # TODO(task1): also trigger on push to main once the train job actually registers a model
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: train-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: flake8 src && bandit -r src && pytest tests -k "not inference"
+  train:
+    needs: lint-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # TODO(task1): Build and push docker/Dockerfile.train as $ACR_LOGIN_SERVER/train:latest.
+      # Also build/push docker/Dockerfile.inference as
+      # $ACR_LOGIN_SERVER/credit-default-serve:latest — Task 2 promote jobs pull that tag.
+      # Then run scripts/run_training_vm.sh so training compute is an Azure VM in this
+      # resource group that is gone when the job finishes, and a new model version is
+      # registered. Secrets/vars already used elsewhere: RESOURCE_GROUP, LOCATION,
+      # SUBNET_ID, ACR_NAME, ACR_LOGIN_SERVER, MLFLOW_PRIVATE_IP, SSH_PUBLIC_KEY, TRAIN_UAI_ID.
+      - name: Ephemeral training
+        run: |
+          echo "TODO(task1): ephemeral train VM + register" >&2
+          exit 1
+      # TODO(task2): after a version is registered, dispatch promote-beta.yml with that version.

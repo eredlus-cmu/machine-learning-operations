@@ -1,0 +1,15 @@
+.venv/
+.git/
+infra/
+terraform.tfstate*
+mlflow.db
+mlruns/
+mlartifacts/
+eval/
+models/
+registry/
+data/output/
+__pycache__/
+.pytest_cache/
+*.pem
+*.pyc

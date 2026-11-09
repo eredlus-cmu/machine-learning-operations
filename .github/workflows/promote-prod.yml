@@ -1,0 +1,48 @@
+name: Promote Prod
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: MLflow model version to promote to prod (approval gate)
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: promote-prod-${{ github.event.inputs.model_version }}
+  cancel-in-progress: false
+env:
+  MODEL_VERSION: ${{ github.event.inputs.model_version }}
+jobs:
+  set-prod-alias:
+    runs-on: [self-hosted, vnet]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - run: pip install mlflow==2.10.0
+      # TODO(task2): set registry alias `prod` on credit_default_model v$MODEL_VERSION.
+      - name: Set prod alias
+        run: |
+          echo "TODO(task2): set prod alias" >&2
+          exit 1
+  deploy-prod:
+    needs: set-prod-alias
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # TODO(task2): deploy credit-default-serve:latest to the prod VM with MODEL_ALIAS=prod.
+      # Smoke: GET /health, POST tests/golden/predict_request.json to /predict,
+      # GET /version includes "model_alias":"prod".
+      - name: Deploy to prod
+        run: |
+          echo "TODO(task2): deploy prod inference" >&2
+          exit 1

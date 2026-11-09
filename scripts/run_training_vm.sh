@@ -81,4 +81,4 @@ if ! python3 -c "import json; d=json.load(open('$ROOT/metrics.json')); assert d.
   exit 1
 fi
 
-exit 1
+exit 0

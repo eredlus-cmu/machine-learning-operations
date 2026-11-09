@@ -3,15 +3,20 @@ on:
   workflow_dispatch:
     inputs:
       model_version:
-        description: MLflow model version to promote to prod (approval gate)
+        description: MLflow model version to promote to production
         required: true
+        type: string
+
 permissions:
   contents: read
+
 concurrency:
-  group: promote-prod-${{ github.event.inputs.model_version }}
+  group: promote-prod
   cancel-in-progress: false
+
 env:
-  MODEL_VERSION: ${{ github.event.inputs.model_version }}
+  MODEL_VERSION: ${{ inputs.model_version }}
+
 jobs:
   set-prod-alias:
     runs-on: [self-hosted, vnet]
@@ -21,11 +26,15 @@ jobs:
         with:
           python-version: "3.10"
       - run: pip install mlflow==2.10.0
-      # TODO(task2): set registry alias `prod` on credit_default_model v$MODEL_VERSION.
       - name: Set prod alias
+        env:
+          MLFLOW_TRACKING_URI: http://${{ secrets.MLFLOW_PRIVATE_IP }}:5000
         run: |
-          echo "TODO(task2): set prod alias" >&2
-          exit 1
+          python scripts/promote_alias.py \
+            --model-name credit_default_model \
+            --version "$MODEL_VERSION" \
+            --alias prod
+
   deploy-prod:
     needs: set-prod-alias
     runs-on: ubuntu-latest
@@ -39,10 +48,20 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      # TODO(task2): deploy credit-default-serve:latest to the prod VM with MODEL_ALIAS=prod.
-      # Smoke: GET /health, POST tests/golden/predict_request.json to /predict,
-      # GET /version includes "model_alias":"prod".
       - name: Deploy to prod
+        env:
+          RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+          MLFLOW_PRIVATE_IP: ${{ secrets.MLFLOW_PRIVATE_IP }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          VM_NAME: ${{ vars.PROD_VM_NAME }}
+          VM_IP: ${{ vars.PROD_VM_IP }}
         run: |
-          echo "TODO(task2): deploy prod inference" >&2
-          exit 1
+          bash scripts/deploy_inference.sh \
+            "$VM_IP" "$ACR_LOGIN_SERVER/credit-default-serve:latest" prod
+      - name: Smoke tests
+        env:
+          INFERENCE_URL: http://${{ vars.PROD_VM_IP }}:8000
+        run: |
+          curl -fsS "$INFERENCE_URL/health"
+          python3 -c 'import json, os, urllib.request; base=os.environ["INFERENCE_URL"]; version=json.load(urllib.request.urlopen(base + "/version", timeout=10)); assert version["model_alias"] == "prod" and str(version["model_version"]) == os.environ["MODEL_VERSION"], version; data=open("tests/golden/predict_request.json", "rb").read(); req=urllib.request.Request(base + "/predict", data=data, headers={"Content-Type": "application/json"}); result=json.load(urllib.request.urlopen(req, timeout=30)); assert result["predictions"] == [1, 0], result; print(version, result)'

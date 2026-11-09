@@ -5,13 +5,23 @@ on:
       model_version:
         description: MLflow model version to promote to beta
         required: true
+        type: string
+  workflow_call:
+    inputs:
+      model_version:
+        required: true
+        type: string
+
 permissions:
   contents: read
+
 concurrency:
-  group: promote-beta-${{ github.event.inputs.model_version }}
+  group: promote-beta
   cancel-in-progress: false
+
 env:
-  MODEL_VERSION: ${{ github.event.inputs.model_version }}
+  MODEL_VERSION: ${{ inputs.model_version }}
+
 jobs:
   set-beta-alias:
     runs-on: [self-hosted, vnet]
@@ -21,12 +31,15 @@ jobs:
         with:
           python-version: "3.10"
       - run: pip install mlflow==2.10.0
-      # TODO(task2): set registry alias `beta` on credit_default_model v$MODEL_VERSION
-      # (scripts/promote_alias.py; MLFLOW_TRACKING_URI is http://$MLFLOW_PRIVATE_IP:5000).
       - name: Set beta alias
+        env:
+          MLFLOW_TRACKING_URI: http://${{ secrets.MLFLOW_PRIVATE_IP }}:5000
         run: |
-          echo "TODO(task2): set beta alias" >&2
-          exit 1
+          python scripts/promote_alias.py \
+            --model-name credit_default_model \
+            --version "$MODEL_VERSION" \
+            --alias beta
+
   deploy-beta:
     needs: set-beta-alias
     runs-on: ubuntu-latest
@@ -40,10 +53,27 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      # TODO(task2): deploy $ACR_LOGIN_SERVER/credit-default-serve:latest to the beta VM
-      # with MODEL_ALIAS=beta via scripts/deploy_inference.sh, then pytest tests/test_inference.py
-      # against http://$BETA_VM_IP:8000.
       - name: Deploy to beta
+        env:
+          RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+          MLFLOW_PRIVATE_IP: ${{ secrets.MLFLOW_PRIVATE_IP }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          VM_NAME: ${{ vars.BETA_VM_NAME }}
+          VM_IP: ${{ vars.BETA_VM_IP }}
         run: |
-          echo "TODO(task2): deploy beta inference" >&2
-          exit 1
+          bash scripts/deploy_inference.sh \
+            "$VM_IP" "$ACR_LOGIN_SERVER/credit-default-serve:latest" beta
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - run: pip install -r requirements.txt
+      - name: Contract tests
+        env:
+          INFERENCE_URL: http://${{ vars.BETA_VM_IP }}:8000
+        run: pytest tests/test_inference.py -v
+      - name: Verify promoted model
+        env:
+          INFERENCE_URL: http://${{ vars.BETA_VM_IP }}:8000
+        run: |
+          python -c 'import json, os, urllib.request; d=json.load(urllib.request.urlopen(os.environ["INFERENCE_URL"] + "/version", timeout=10)); assert d["model_alias"] == "beta" and str(d["model_version"]) == os.environ["MODEL_VERSION"], d; print(d)'

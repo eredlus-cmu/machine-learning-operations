@@ -1,5 +1,6 @@
 """FastAPI inference server. Load weights from MLflow by registry alias."""
 from contextlib import asynccontextmanager
+from mlflow.tracking import MlflowClient
 import os
 from typing import Any, Dict, List, Optional
 import mlflow
@@ -28,12 +29,11 @@ class PredictResponse(BaseModel):
 def load_model() -> None:
     global _model, _model_version, _model_alias
     mlflow.set_tracking_uri(TRACKING_URI)
-    # TODO(task2): resolve MODEL_ALIAS on MODEL_NAME in the registry and
-    # load models:/{MODEL_NAME}@{MODEL_ALIAS}.
-    # Set _model, _model_version, _model_alias.
-    # /version must return those fields so the grader can match alias
-    # promotion.
-    raise NotImplementedError("load model by registry alias")
+    client = MlflowClient()
+    mv = client.get_model_version_by_alias(MODEL_NAME, MODEL_ALIAS)
+    _model = mlflow.pyfunc.load_model(f"models:/{MODEL_NAME}@{MODEL_ALIAS}")
+    _model_version = str(mv.version)
+    _model_alias = MODEL_ALIAS
 
 
 @asynccontextmanager

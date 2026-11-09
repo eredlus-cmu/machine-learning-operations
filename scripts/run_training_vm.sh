@@ -34,4 +34,51 @@ trap cleanup EXIT
 #
 # The grader counts VMs in this resource group before, during, and after the workflow.
 # The trap deletes $VM when this script exits — keep that, or after==before will fail.
+
+az vm create -g "$RESOURCE_GROUP" -n "$VM" -l "$LOCATION" \
+  --image Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:latest \
+  --size "$VM_SIZE" --admin-username azureuser --ssh-key-values "$SSH_PUBLIC_KEY" \
+  --subnet "$SUBNET_ID" --public-ip-sku Standard \
+  --assign-identity "$TRAIN_UAI_ID" \
+  --custom-data "$CI" -o none
+
+timeout 600 az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM" --command-id RunShellScript \
+  --scripts "sudo cloud-init status --wait" -o none
+
+set +e
+az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM" --command-id RunShellScript \
+  --scripts '#!/usr/bin/env bash
+set -euo pipefail
+az login --identity
+az acr login --name "$ACR_NAME"
+docker pull "$TRAIN_IMAGE"
+mkdir -p /opt/artifacts
+docker run --rm \
+  -v /opt/artifacts:/artifacts \
+  -e MLFLOW_TRACKING_URI="$MLFLOW_TRACKING_URI" \
+  -e IMAGE_SHA="${IMAGE_SHA:-}" \
+  "$TRAIN_IMAGE"
+cat /opt/artifacts/metrics.json
+' \
+  --parameters ACR_NAME="$ACR_NAME" TRAIN_IMAGE="$TRAIN_IMAGE" \
+    MLFLOW_TRACKING_URI="$MLFLOW_TRACKING_URI" IMAGE_SHA="${IMAGE_SHA:-}" \
+  --query "value[0].message" -o tsv > "$ROOT/train_stdout.log"
+AZ_RC=$?
+set -e
+
+if [[ $AZ_RC -ne 0 ]]; then
+  echo "=== train run-command failed (az exit $AZ_RC) ===" >&2
+  cat "$ROOT/train_stdout.log" >&2 || true
+  exit 1
+fi
+
+echo "=== train stdout (tail) ==="; tail -25 "$ROOT/train_stdout.log"
+grep -oE '\{"model_version": ?"[^"]+"\}' "$ROOT/train_stdout.log" > "$ROOT/metrics.json" || true
+
+if ! python3 -c "import json; d=json.load(open('$ROOT/metrics.json')); assert d.get('model_version')" 2>/dev/null; then
+  echo "=== train pipeline failed (no valid metrics.json); full train stdout: ===" >&2
+  cat "$ROOT/train_stdout.log" >&2 || true
+  exit 1
+fi
+
 exit 1
